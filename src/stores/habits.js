@@ -1,7 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { saveData, loadData } from '../utils/storage'
+import { saveData, loadData, clearData } from '../utils/storage'
 import { formatDate, getDaysAgo, calculateStreak, calculateLongestStreak, calculateCompletionRate, countTotalCheckins, isWithinCatchUpWindow } from '../utils/date'
+
+// Data version for migration
+const DATA_VERSION = 2
 
 // Categories
 export const HABIT_CATEGORIES = {
@@ -20,12 +23,22 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2)
 }
 
-// Generate check-in data for past 30 days with given completion rate
-function generateCheckins(completionRate) {
+// Deterministic pseudo-random generator for consistent check-in data
+function seededRandom(seed) {
+  let s = seed
+  return function() {
+    s = Math.sin(s) * 10000
+    return s - Math.floor(s)
+  }
+}
+
+// Generate deterministic check-in data for past 30 days with given completion rate
+function generateCheckins(completionRate, seed = 1) {
   const checkins = {}
+  const random = seededRandom(seed)
   for (let i = 0; i < 30; i++) {
     const dateStr = getDaysAgo(i)
-    checkins[dateStr] = Math.random() < completionRate
+    checkins[dateStr] = random() < completionRate
   }
   return checkins
 }
@@ -69,32 +82,19 @@ function generateSampleDiaries() {
   return diaries
 }
 
-// Pre-seeded habits
+// Pre-seeded habits with proper category distribution and distinct completion rates
 function createSeedHabits() {
   return [
     {
       id: generateId(),
-      name: '晨跑',
+      name: '晨跑30分钟',
       icon: '🏃',
       color: '#FF6B6B',
       category: 'health',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.70),
-      catchUps: {},
-      diaries: generateSampleDiaries()
-    },
-    {
-      id: generateId(),
-      name: '阅读30分钟',
-      icon: '📚',
-      color: '#4ECDC4',
-      category: 'learning',
-      frequency: 'daily',
-      weeklyTarget: 7,
-      createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.85),
+      checkins: generateCheckins(0.75, 101),
       catchUps: {},
       diaries: generateSampleDiaries()
     },
@@ -102,25 +102,90 @@ function createSeedHabits() {
       id: generateId(),
       name: '喝8杯水',
       icon: '💧',
-      color: '#45B7D1',
+      color: '#FF8A80',
       category: 'health',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.90),
+      checkins: generateCheckins(0.92, 102),
       catchUps: {},
       diaries: generateSampleDiaries()
     },
     {
       id: generateId(),
-      name: '冥想',
+      name: '冥想10分钟',
       icon: '🧘',
-      color: '#96CEB4',
+      color: '#FF5252',
       category: 'health',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.60),
+      checkins: generateCheckins(0.68, 103),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '阅读专业书',
+      icon: '📚',
+      color: '#4ECDC4',
+      category: 'learning',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.88, 201),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '背英语单词',
+      icon: '🔤',
+      color: '#26A69A',
+      category: 'learning',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.82, 202),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '学习编程1小时',
+      icon: '💻',
+      color: '#80CBC4',
+      category: 'learning',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.78, 203),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '早睡11点前',
+      icon: '😴',
+      color: '#45B7D1',
+      category: 'life',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.55, 301),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '整理房间',
+      icon: '🧹',
+      color: '#29B6F6',
+      category: 'life',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.48, 302),
       catchUps: {},
       diaries: generateSampleDiaries()
     },
@@ -128,46 +193,172 @@ function createSeedHabits() {
       id: generateId(),
       name: '写日记',
       icon: '📝',
-      color: '#FFEAA7',
+      color: '#4FC3F7',
       category: 'life',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.50),
+      checkins: generateCheckins(0.52, 303),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '工作计划复盘',
+      icon: '📋',
+      color: '#96CEB4',
+      category: 'work',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.70, 401),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '番茄工作法',
+      icon: '🍅',
+      color: '#66BB6A',
+      category: 'work',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.65, 402),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '联系一位朋友',
+      icon: '👥',
+      color: '#DDA0DD',
+      category: 'social',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.42, 501),
+      catchUps: {},
+      diaries: generateSampleDiaries()
+    },
+    {
+      id: generateId(),
+      name: '家人视频通话',
+      icon: '📱',
+      color: '#CE93D8',
+      category: 'social',
+      frequency: 'daily',
+      weeklyTarget: 7,
+      createdAt: getDaysAgo(30),
+      checkins: generateCheckins(0.38, 502),
       catchUps: {},
       diaries: generateSampleDiaries()
     }
   ]
 }
 
+// Smart category inference based on habit name and icon
+function inferCategory(habit) {
+  const name = habit.name.toLowerCase()
+  const icon = habit.icon || ''
+  
+  const healthKeywords = ['跑', '走', '运动', '健身', '喝', '水', '睡', '冥想', '锻炼', '瑜伽', '减肥', '健康', '🏃', '🚶', '💧', '🧘', '😴', '🏋️', '🥗', '🍎', '💊', '🏊', '🚴']
+  const learningKeywords = ['读', '学', '习', '背', '写', '代码', '编程', '书', '📚', '💻', '📝', '🎓', '🔤', '🧠']
+  const lifeKeywords = ['整理', '打扫', '日记', '早睡', '早起', '起床', '家务', '生活', '😴', '🌅', '🧹', '📝']
+  const workKeywords = ['工作', '计划', '复盘', '番茄', '任务', '项目', '💼', '📋', '🍅', '📊']
+  const socialKeywords = ['联系', '朋友', '家人', '社交', '通话', '视频', '👥', '📱', '💬', '☎️']
+  
+  for (const kw of healthKeywords) {
+    if (name.includes(kw) || icon.includes(kw)) return 'health'
+  }
+  for (const kw of learningKeywords) {
+    if (name.includes(kw) || icon.includes(kw)) return 'learning'
+  }
+  for (const kw of lifeKeywords) {
+    if (name.includes(kw) || icon.includes(kw)) return 'life'
+  }
+  for (const kw of workKeywords) {
+    if (name.includes(kw) || icon.includes(kw)) return 'work'
+  }
+  for (const kw of socialKeywords) {
+    if (name.includes(kw) || icon.includes(kw)) return 'social'
+  }
+  
+  return 'other'
+}
+
+// Check if data needs migration
+function checkDataMigration(savedData) {
+  if (!savedData) {
+    return { needsReset: true, data: null }
+  }
+  
+  let habitsData = []
+  let currentVersion = 0
+  
+  if (Array.isArray(savedData)) {
+    habitsData = savedData
+    currentVersion = 0
+  } else if (savedData.habits && Array.isArray(savedData.habits)) {
+    habitsData = savedData.habits
+    currentVersion = savedData._version || 0
+  } else {
+    return { needsReset: true, data: null }
+  }
+  
+  if (habitsData.length === 0) {
+    return { needsReset: true, data: null }
+  }
+  
+  if (currentVersion < DATA_VERSION) {
+    if (currentVersion === 0) {
+      return { needsReset: true, data: null }
+    }
+    const migratedData = habitsData.map(habit => ({
+      ...habit,
+      category: habit.category || inferCategory(habit),
+      catchUps: habit.catchUps || {},
+      diaries: habit.diaries || {}
+    }))
+    return { needsReset: false, data: migratedData, migrated: true }
+  }
+  
+  return { needsReset: false, data: habitsData, migrated: false }
+}
+
 export const useHabitsStore = defineStore('habits', () => {
   // State
   const habits = ref([])
   const initialized = ref(false)
+  const dataVersion = ref(DATA_VERSION)
 
   // Initialize store from localStorage or seed data
   function init() {
     if (initialized.value) return
     
     const savedData = loadData()
-    if (savedData && Array.isArray(savedData) && savedData.length > 0) {
-      habits.value = savedData.map(habit => ({
-        ...habit,
-        category: habit.category || 'other',
-        catchUps: habit.catchUps || {},
-        diaries: habit.diaries || {}
-      }))
-      persist()
-    } else {
+    const migrationResult = checkDataMigration(savedData)
+    
+    if (migrationResult.needsReset) {
+      clearData()
       habits.value = createSeedHabits()
       persist()
+    } else {
+      habits.value = migrationResult.data
+      if (migrationResult.migrated) {
+        persist()
+      }
     }
     initialized.value = true
   }
 
-  // Persist to localStorage
+  // Persist to localStorage with version
   function persist() {
-    saveData(habits.value)
+    const dataWithVersion = {
+      _version: DATA_VERSION,
+      habits: habits.value
+    }
+    saveData(dataWithVersion)
   }
 
   // Getters
@@ -430,10 +621,18 @@ export const useHabitsStore = defineStore('habits', () => {
     return !!habit.diaries[dateStr]
   }
 
+  function resetToSeed() {
+    clearData()
+    habits.value = createSeedHabits()
+    persist()
+    initialized.value = true
+  }
+
   return {
     // State
     habits,
     initialized,
+    dataVersion,
     // Getters
     todayStr,
     todayCompletedCount,
@@ -466,6 +665,7 @@ export const useHabitsStore = defineStore('habits', () => {
     deleteDiary,
     hasDiary,
     getHabitsByCategory,
-    getCategoryStats
+    getCategoryStats,
+    resetToSeed
   }
 })
