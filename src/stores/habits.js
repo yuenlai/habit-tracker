@@ -18,6 +18,45 @@ function generateCheckins(completionRate) {
   return checkins
 }
 
+// Generate sample diary entries for seed data
+function generateSampleDiaries() {
+  const diaries = {}
+  const sampleFeelings = [
+    '今天状态不错，完成得很顺利',
+    '有点累但还是坚持下来了',
+    '今天心情很好，做事效率很高',
+    '感觉身体有点不适但完成了',
+    '今天特别有成就感'
+  ]
+  const sampleDifficulties = [
+    '早上起不来，差点放弃了',
+    '工作太忙，时间不够',
+    '天气不好，影响了状态',
+    '今天状态不佳，差点没完成',
+    '没有困难，很轻松'
+  ]
+  const sampleGains = [
+    '学会了更好地管理时间',
+    '感受到了坚持的力量',
+    '身体感觉更有活力了',
+    '心态变得更积极了',
+    '养成了很好的习惯'
+  ]
+  
+  for (let i = 0; i < 30; i++) {
+    const dateStr = getDaysAgo(i)
+    if (Math.random() < 0.4) {
+      diaries[dateStr] = {
+        feeling: sampleFeelings[Math.floor(Math.random() * sampleFeelings.length)],
+        difficulty: sampleDifficulties[Math.floor(Math.random() * sampleDifficulties.length)],
+        gain: sampleGains[Math.floor(Math.random() * sampleGains.length)],
+        createdAt: Date.now() - i * 86400000
+      }
+    }
+  }
+  return diaries
+}
+
 // Pre-seeded habits
 function createSeedHabits() {
   return [
@@ -30,7 +69,8 @@ function createSeedHabits() {
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
       checkins: generateCheckins(0.70),
-      catchUps: {}
+      catchUps: {},
+      diaries: generateSampleDiaries()
     },
     {
       id: generateId(),
@@ -41,7 +81,8 @@ function createSeedHabits() {
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
       checkins: generateCheckins(0.85),
-      catchUps: {}
+      catchUps: {},
+      diaries: generateSampleDiaries()
     },
     {
       id: generateId(),
@@ -52,7 +93,8 @@ function createSeedHabits() {
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
       checkins: generateCheckins(0.90),
-      catchUps: {}
+      catchUps: {},
+      diaries: generateSampleDiaries()
     },
     {
       id: generateId(),
@@ -63,7 +105,8 @@ function createSeedHabits() {
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
       checkins: generateCheckins(0.60),
-      catchUps: {}
+      catchUps: {},
+      diaries: generateSampleDiaries()
     },
     {
       id: generateId(),
@@ -74,7 +117,8 @@ function createSeedHabits() {
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
       checkins: generateCheckins(0.50),
-      catchUps: {}
+      catchUps: {},
+      diaries: generateSampleDiaries()
     }
   ]
 }
@@ -92,7 +136,8 @@ export const useHabitsStore = defineStore('habits', () => {
     if (savedData && Array.isArray(savedData) && savedData.length > 0) {
       habits.value = savedData.map(habit => ({
         ...habit,
-        catchUps: habit.catchUps || {}
+        catchUps: habit.catchUps || {},
+        diaries: habit.diaries || {}
       }))
       persist()
     } else {
@@ -151,7 +196,8 @@ export const useHabitsStore = defineStore('habits', () => {
       weeklyTarget: habitData.weeklyTarget || 7,
       createdAt: todayStr.value,
       checkins: {},
-      catchUps: {}
+      catchUps: {},
+      diaries: {}
     }
     habits.value.push(newHabit)
     persist()
@@ -248,6 +294,62 @@ export const useHabitsStore = defineStore('habits', () => {
     return habit.catchUps && habit.catchUps[dateStr] === true
   }
 
+  // Diary methods
+  function saveDiary(habitId, dateStr, diaryData) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit) return false
+    
+    if (!habit.diaries) {
+      habit.diaries = {}
+    }
+    
+    habit.diaries[dateStr] = {
+      feeling: diaryData.feeling || '',
+      difficulty: diaryData.difficulty || '',
+      gain: diaryData.gain || '',
+      createdAt: Date.now()
+    }
+    
+    persist()
+    return true
+  }
+
+  function getDiary(habitId, dateStr) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit || !habit.diaries) return null
+    return habit.diaries[dateStr] || null
+  }
+
+  function getDiaries(habitId) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit || !habit.diaries) return []
+    
+    return Object.entries(habit.diaries)
+      .map(([date, diary]) => ({
+        date,
+        ...diary
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }
+
+  function deleteDiary(habitId, dateStr) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit || !habit.diaries) return false
+    
+    if (habit.diaries[dateStr]) {
+      delete habit.diaries[dateStr]
+      persist()
+      return true
+    }
+    return false
+  }
+
+  function hasDiary(habitId, dateStr) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit || !habit.diaries) return false
+    return !!habit.diaries[dateStr]
+  }
+
   return {
     // State
     habits,
@@ -275,6 +377,11 @@ export const useHabitsStore = defineStore('habits', () => {
     catchUpCheckin,
     cancelCatchUp,
     canCatchUp,
-    isCatchUp
+    isCatchUp,
+    saveDiary,
+    getDiary,
+    getDiaries,
+    deleteDiary,
+    hasDiary
   }
 })

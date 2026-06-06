@@ -4,7 +4,10 @@
     <div class="card-content">
       <div class="card-header">
         <span class="habit-icon">{{ habit.icon }}</span>
-        <StreakBadge :streak="streak" />
+        <div class="header-right">
+          <StreakBadge :streak="streak" />
+          <span v-if="hasTodayDiary" class="diary-indicator" title="今天已写日记">📝</span>
+        </div>
       </div>
       <h3 class="habit-name">{{ habit.name }}</h3>
       <div class="card-footer">
@@ -12,7 +15,7 @@
         <button
           class="check-button"
           :class="{ checked: isChecked }"
-          @click="handleCheck"
+          @click.stop="handleCheck"
           :disabled="animating"
         >
           <span v-if="isChecked" class="check-icon">✓</span>
@@ -24,13 +27,24 @@
     <div v-if="showConfetti" class="confetti-container">
       <span v-for="i in 8" :key="i" class="confetti-piece" :style="{ '--i': i }"></span>
     </div>
+
+    <!-- Diary Dialog -->
+    <DiaryDialog
+      v-model:visible="showDiaryDialog"
+      :habit-id="habit.id"
+      @success="handleDiarySuccess"
+      @skip="handleDiarySkip"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useHabitsStore } from '../stores/habits'
 import StreakBadge from './StreakBadge.vue'
+import DiaryDialog from './DiaryDialog.vue'
+import { formatDate } from '../utils/date'
 
 const props = defineProps({
   habit: {
@@ -39,31 +53,49 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['click'])
+const emit = defineEmits(['click', 'checkin'])
 
 const store = useHabitsStore()
 const animating = ref(false)
 const showConfetti = ref(false)
+const showDiaryDialog = ref(false)
 
+const todayStr = computed(() => formatDate(new Date()))
 const isChecked = computed(() => store.isCheckedToday(props.habit.id))
 const streak = computed(() => store.getHabitStreak(props.habit.id))
 const completionRate = computed(() => store.getHabitCompletionRate(props.habit.id, 7))
+const hasTodayDiary = computed(() => store.hasDiary(props.habit.id, todayStr.value))
 
 function handleCheck() {
   if (animating.value) return
   
+  const wasChecked = isChecked.value
   store.toggleCheckin(props.habit.id)
+  emit('checkin', { habitId: props.habit.id, checked: !wasChecked })
   
-  if (!isChecked.value) {
-    // Was just checked (now true), show animation
+  if (!wasChecked) {
     animating.value = true
     showConfetti.value = true
     
     setTimeout(() => {
       showConfetti.value = false
       animating.value = false
+      if (!hasTodayDiary.value) {
+        showDiaryDialog.value = true
+      }
     }, 800)
   }
+}
+
+function handleDiarySuccess(result) {
+  if (result.action === 'create') {
+    ElMessage.success('日记已保存')
+  } else if (result.action === 'edit') {
+    ElMessage.success('日记已更新')
+  }
+}
+
+function handleDiarySkip() {
 }
 </script>
 
@@ -101,6 +133,17 @@ function handleCheck() {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diary-indicator {
+  font-size: 18px;
+  cursor: help;
 }
 
 .habit-icon {

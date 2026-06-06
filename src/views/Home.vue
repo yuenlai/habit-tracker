@@ -60,14 +60,14 @@
         <el-empty description="还没有习惯，点击添加开始打卡吧！" />
       </div>
       <div v-else class="habits-grid">
-        <router-link
+        <div
           v-for="habit in store.habits"
           :key="habit.id"
-          :to="`/habit/${habit.id}`"
           class="habit-link"
+          @click="goToDetail(habit.id)"
         >
-          <HabitCard :habit="habit" @click.prevent="goToDetail(habit.id)" />
-        </router-link>
+          <HabitCard :habit="habit" @checkin="handleCheckin" />
+        </div>
       </div>
     </section>
 
@@ -117,6 +117,9 @@ function handleAddHabit(habitData) {
 
 function goToDetail(id) {
   router.push(`/habit/${id}`)
+}
+
+function handleCheckin() {
 }
 
 onMounted(() => {

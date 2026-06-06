@@ -42,25 +42,47 @@
             </span>
           </div>
           <div class="catch-up-action">
-            <el-button
-              v-if="day.checked && day.isCatchUp"
-              size="small"
-              type="danger"
-              plain
-              @click="handleCancelCatchUp(day.date)"
-            >
-              取消补签
-            </el-button>
-            <el-button
-              v-else-if="!day.checked"
-              size="small"
-              type="primary"
-              :disabled="!day.canCatchUp"
-              @click="handleCatchUp(day.date)"
-            >
-              补签
-            </el-button>
-            <span v-else class="cannot-edit">已打卡</span>
+            <div class="action-buttons">
+              <el-button
+                v-if="day.checked && store.hasDiary(habitId, day.date)"
+                size="small"
+                type="success"
+                plain
+                @click.stop="handleEditDiary(day.date)"
+              >
+                <el-icon><Edit /></el-icon>
+                日记
+              </el-button>
+              <el-button
+                v-if="day.checked && day.isCatchUp"
+                size="small"
+                type="danger"
+                plain
+                @click.stop="handleCancelCatchUp(day.date)"
+              >
+                取消补签
+              </el-button>
+              <el-button
+                v-else-if="!day.checked"
+                size="small"
+                type="primary"
+                :disabled="!day.canCatchUp"
+                @click.stop="handleCatchUp(day.date)"
+              >
+                补签
+              </el-button>
+              <el-button
+                v-else-if="day.checked && !day.isCatchUp && !store.hasDiary(habitId, day.date)"
+                size="small"
+                type="success"
+                plain
+                @click.stop="handleWriteDiary(day.date)"
+              >
+                <el-icon><EditPen /></el-icon>
+                写日记
+              </el-button>
+              <span v-else-if="day.checked && !day.isCatchUp" class="cannot-edit">已打卡</span>
+            </div>
           </div>
         </div>
       </div>
@@ -74,13 +96,24 @@
       <el-button @click="handleClose">关闭</el-button>
     </template>
   </el-dialog>
+
+  <!-- Diary Dialog -->
+  <DiaryDialog
+    v-model:visible="showDiaryDialog"
+    :habit-id="habitId"
+    :date-str="currentDiaryDate"
+    :is-edit="isEditingDiary"
+    @success="handleDiarySuccess"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { InfoFilled, Refresh, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
+import { InfoFilled, Refresh, CircleCheckFilled, CircleCloseFilled, Edit, EditPen } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useHabitsStore } from '../stores/habits'
 import { getCatchUpDays, parseDate, getDayName } from '../utils/date'
+import DiaryDialog from './DiaryDialog.vue'
 
 const props = defineProps({
   visible: {
@@ -97,6 +130,10 @@ const emit = defineEmits(['update:visible', 'success'])
 
 const store = useHabitsStore()
 const animating = ref(false)
+const showDiaryDialog = ref(false)
+const currentDiaryDate = ref('')
+const isEditingDiary = ref(false)
+const pendingCatchUpDate = ref('')
 
 const visible = computed({
   get: () => props.visible,
@@ -128,11 +165,38 @@ function handleCatchUp(dateStr) {
   const success = store.catchUpCheckin(props.habitId, dateStr)
   if (success) {
     animating.value = true
+    pendingCatchUpDate.value = dateStr
     setTimeout(() => {
       animating.value = false
+      if (!store.hasDiary(props.habitId, dateStr)) {
+        currentDiaryDate.value = dateStr
+        isEditingDiary.value = false
+        showDiaryDialog.value = true
+      }
     }, 300)
     emit('success', { date: dateStr, action: 'catchup' })
   }
+}
+
+function handleWriteDiary(dateStr) {
+  currentDiaryDate.value = dateStr
+  isEditingDiary.value = false
+  showDiaryDialog.value = true
+}
+
+function handleEditDiary(dateStr) {
+  currentDiaryDate.value = dateStr
+  isEditingDiary.value = true
+  showDiaryDialog.value = true
+}
+
+function handleDiarySuccess(result) {
+  if (result.action === 'create') {
+    ElMessage.success('日记已保存')
+  } else if (result.action === 'edit') {
+    ElMessage.success('日记已更新')
+  }
+  emit('success', { date: result.date, action: 'diary' })
 }
 
 function handleCancelCatchUp(dateStr) {
@@ -256,6 +320,12 @@ watch(() => props.visible, (val) => {
 .missed-tag {
   background: #fee2e2;
   color: #dc2626;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .cannot-edit {
