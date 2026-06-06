@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { saveData, loadData } from '../utils/storage'
-import { formatDate, getDaysAgo, calculateStreak, calculateLongestStreak, calculateCompletionRate, countTotalCheckins } from '../utils/date'
+import { formatDate, getDaysAgo, calculateStreak, calculateLongestStreak, calculateCompletionRate, countTotalCheckins, isWithinCatchUpWindow } from '../utils/date'
 
 // Generate unique ID
 function generateId() {
@@ -29,7 +29,8 @@ function createSeedHabits() {
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.70)
+      checkins: generateCheckins(0.70),
+      catchUps: {}
     },
     {
       id: generateId(),
@@ -39,7 +40,8 @@ function createSeedHabits() {
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.85)
+      checkins: generateCheckins(0.85),
+      catchUps: {}
     },
     {
       id: generateId(),
@@ -49,7 +51,8 @@ function createSeedHabits() {
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.90)
+      checkins: generateCheckins(0.90),
+      catchUps: {}
     },
     {
       id: generateId(),
@@ -59,7 +62,8 @@ function createSeedHabits() {
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.60)
+      checkins: generateCheckins(0.60),
+      catchUps: {}
     },
     {
       id: generateId(),
@@ -69,7 +73,8 @@ function createSeedHabits() {
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
-      checkins: generateCheckins(0.50)
+      checkins: generateCheckins(0.50),
+      catchUps: {}
     }
   ]
 }
@@ -85,7 +90,11 @@ export const useHabitsStore = defineStore('habits', () => {
     
     const savedData = loadData()
     if (savedData && Array.isArray(savedData) && savedData.length > 0) {
-      habits.value = savedData
+      habits.value = savedData.map(habit => ({
+        ...habit,
+        catchUps: habit.catchUps || {}
+      }))
+      persist()
     } else {
       habits.value = createSeedHabits()
       persist()
@@ -141,7 +150,8 @@ export const useHabitsStore = defineStore('habits', () => {
       frequency: habitData.frequency || 'daily',
       weeklyTarget: habitData.weeklyTarget || 7,
       createdAt: todayStr.value,
-      checkins: {}
+      checkins: {},
+      catchUps: {}
     }
     habits.value.push(newHabit)
     persist()
@@ -204,6 +214,40 @@ export const useHabitsStore = defineStore('habits', () => {
     return habit.checkins[todayStr.value] === true
   }
 
+  function catchUpCheckin(habitId, dateStr) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit) return false
+    if (!isWithinCatchUpWindow(dateStr)) return false
+    
+    habit.checkins[dateStr] = true
+    habit.catchUps[dateStr] = true
+    persist()
+    return true
+  }
+
+  function cancelCatchUp(habitId, dateStr) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit) return
+    
+    habit.checkins[dateStr] = false
+    delete habit.catchUps[dateStr]
+    persist()
+  }
+
+  function canCatchUp(habitId, dateStr) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit) return false
+    if (!isWithinCatchUpWindow(dateStr)) return false
+    if (habit.checkins[dateStr] === true) return false
+    return true
+  }
+
+  function isCatchUp(habitId, dateStr) {
+    const habit = habits.value.find(h => h.id === habitId)
+    if (!habit) return false
+    return habit.catchUps && habit.catchUps[dateStr] === true
+  }
+
   return {
     // State
     habits,
@@ -227,6 +271,10 @@ export const useHabitsStore = defineStore('habits', () => {
     getHabitLongestStreak,
     getHabitCompletionRate,
     getHabitTotalCheckins,
-    isCheckedToday
+    isCheckedToday,
+    catchUpCheckin,
+    cancelCatchUp,
+    canCatchUp,
+    isCatchUp
   }
 })

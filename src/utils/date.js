@@ -170,3 +170,39 @@ export function calculateCompletionRate(checkins, days = 30) {
 export function countTotalCheckins(checkins) {
   return Object.values(checkins).filter(v => v === true).length
 }
+
+/**
+ * Check if a date is within the last 7 days (not including today)
+ * @param {string} dateStr - YYYY-MM-DD format
+ * @returns {boolean}
+ */
+export function isWithinCatchUpWindow(dateStr) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const targetDate = parseDate(dateStr)
+  targetDate.setHours(0, 0, 0, 0)
+  const diffTime = today - targetDate
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  return diffDays > 0 && diffDays <= 7
+}
+
+/**
+ * Get array of date strings for the last 7 days (excluding today)
+ * @returns {string[]}
+ */
+export function getCatchUpDays() {
+  const result = []
+  for (let i = 7; i >= 1; i--) {
+    result.push(getDaysAgo(i))
+  }
+  return result
+}
+
+/**
+ * Check if a date is today
+ * @param {string} dateStr - YYYY-MM-DD format
+ * @returns {boolean}
+ */
+export function isToday(dateStr) {
+  return dateStr === formatDate(new Date())
+}

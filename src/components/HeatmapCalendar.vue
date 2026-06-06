@@ -35,12 +35,45 @@
             :rx="2"
             :ry="2"
             class="heatmap-cell"
+            :class="{ 
+              'clickable': day && interactive && canInteract(day),
+              'catch-up': day && day.isCatchUp
+            }"
             @mouseenter="showTooltip($event, day)"
             @mouseleave="hideTooltip"
+            @click="handleCellClick(day)"
+          />
+          <!-- Catch-up indicator -->
+          <circle
+            v-for="(day, dayIndex) in week"
+            :key="'catchup-' + weekIndex + '-' + dayIndex"
+            v-if="day && day.isCatchUp"
+            :cx="weekIndex * (cellSize + cellGap) + cellSize - 2"
+            :cy="dayIndex * (cellSize + cellGap) + 2"
+            :r="3"
+            fill="#f59e0b"
+            stroke="#fff"
+            stroke-width="1"
           />
         </g>
       </g>
     </svg>
+
+    <!-- Legend -->
+    <div v-if="interactive" class="heatmap-legend">
+      <div class="legend-item">
+        <span class="legend-dot normal"></span>
+        <span class="legend-text">正常打卡</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot catch-up"></span>
+        <span class="legend-text">补签</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot available"></span>
+        <span class="legend-text">可补签</span>
+      </div>
+    </div>
 
     <!-- Tooltip -->
     <div
@@ -49,16 +82,18 @@
       :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
     >
       <span class="tooltip-date">{{ tooltip.date }}</span>
-      <span class="tooltip-status" :class="{ checked: tooltip.checked }">
-        {{ tooltip.checked ? '已完成' : '未完成' }}
+      <span class="tooltip-status" :class="{ checked: tooltip.checked, 'catch-up': tooltip.isCatchUp }">
+        {{ tooltip.isCatchUp ? '已补签' : (tooltip.checked ? '已完成' : (tooltip.canCatchUp ? '可补签' : '未完成')) }}
       </span>
+      <span v-if="tooltip.canCatchUp && !tooltip.checked" class="tooltip-hint">点击补签</span>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { getDaysAgo, parseDate, getMonthName, formatDate } from '../utils/date'
+import { getDaysAgo, parseDate, getMonthName, formatDate, isWithinCatchUpWindow } from '../utils/date'
+import { useHabitsStore } from '../stores/habits'
 
 const props = defineProps({
   checkins: {
@@ -72,12 +107,23 @@ const props = defineProps({
   days: {
     type: Number,
     default: 90
+  },
+  habitId: {
+    type: String,
+    default: null
+  },
+  interactive: {
+    type: Boolean,
+    default: false
   }
 })
 
+const emit = defineEmits(['cell-click', 'catchup'])
+
+const store = useHabitsStore()
 const cellSize = 12
 const cellGap = 2
-const tooltip = ref({ visible: false, x: 0, y: 0, date: '', checked: false })
+const tooltip = ref({ visible: false, x: 0, y: 0, date: '', checked: false, isCatchUp: false, canCatchUp: false })
 
 // Generate date data for the heatmap
 const dateData = computed(() => {
@@ -85,12 +131,16 @@ const dateData = computed(() => {
   for (let i = props.days - 1; i >= 0; i--) {
     const dateStr = getDaysAgo(i)
     const date = parseDate(dateStr)
+    const isCatchUp = props.habitId ? store.isCatchUp(props.habitId, dateStr) : false
+    const canCatchUp = props.habitId ? store.canCatchUp(props.habitId, dateStr) : false
     data.push({
       date: dateStr,
       dateObj: date,
       dayOfWeek: date.getDay(),
       month: date.getMonth(),
-      checked: props.checkins[dateStr] === true
+      checked: props.checkins[dateStr] === true,
+      isCatchUp,
+      canCatchUp
     })
   }
   return data
@@ -162,8 +212,38 @@ function dayLabelY(dayIndex) {
 // Get cell color based on check-in status
 function getCellColor(day) {
   if (!day) return 'transparent'
-  if (!day.checked) return '#ebedf0'
+  if (!day.checked) {
+    if (props.interactive && day.canCatchUp) {
+      return '#fef3c7'
+    }
+    return '#ebedf0'
+  }
+  if (day.isCatchUp) {
+    return '#fbbf24'
+  }
   return props.color
+}
+
+// Check if cell can be interacted with
+function canInteract(day) {
+  return day && day.canCatchUp
+}
+
+// Handle cell click
+function handleCellClick(day) {
+  if (!day) return
+  
+  emit('cell-click', day)
+  
+  if (props.interactive && props.habitId && day.canCatchUp) {
+    const success = store.catchUpCheckin(props.habitId, day.date)
+    if (success) {
+      emit('catchup', { date: day.date, action: 'catchup' })
+    }
+  } else if (props.interactive && props.habitId && day.isCatchUp && day.checked) {
+    store.cancelCatchUp(props.habitId, day.date)
+    emit('catchup', { date: day.date, action: 'cancel' })
+  }
 }
 
 // Tooltip handlers
@@ -174,9 +254,11 @@ function showTooltip(event, day) {
   tooltip.value = {
     visible: true,
     x: rect.left - containerRect.left + cellSize / 2,
-    y: rect.top - containerRect.top - 40,
+    y: rect.top - containerRect.top - 50,
     date: day.date,
-    checked: day.checked
+    checked: day.checked,
+    isCatchUp: day.isCatchUp,
+    canCatchUp: day.canCatchUp
   }
 }
 
@@ -207,15 +289,59 @@ function hideTooltip() {
 }
 
 .heatmap-cell {
-  cursor: pointer;
-  transition: stroke 0.15s ease;
+  cursor: default;
+  transition: all 0.15s ease;
   stroke: rgba(27, 31, 35, 0.06);
   stroke-width: 0;
+}
+
+.heatmap-cell.clickable {
+  cursor: pointer;
 }
 
 .heatmap-cell:hover {
   stroke: rgba(27, 31, 35, 0.3);
   stroke-width: 1;
+}
+
+.heatmap-cell.clickable:hover {
+  stroke: #f59e0b;
+  stroke-width: 2;
+}
+
+.heatmap-legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 12px;
+  padding-right: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #666;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-dot.normal {
+  background: #4ECDC4;
+}
+
+.legend-dot.catch-up {
+  background: #fbbf24;
+}
+
+.legend-dot.available {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
 }
 
 .heatmap-tooltip {
@@ -257,5 +383,15 @@ function hideTooltip() {
 
 .tooltip-status.checked {
   color: #2ea043;
+}
+
+.tooltip-status.catch-up {
+  color: #fbbf24;
+}
+
+.tooltip-hint {
+  color: #fbbf24;
+  font-size: 10px;
+  margin-top: 2px;
 }
 </style>

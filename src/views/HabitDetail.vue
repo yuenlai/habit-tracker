@@ -39,8 +39,21 @@
 
     <!-- Heatmap Section -->
     <section class="section-card">
-      <h3>打卡日历</h3>
-      <HeatmapCalendar :checkins="habit.checkins" :color="habit.color" :days="90" />
+      <div class="section-header">
+        <h3>打卡日历</h3>
+        <el-button size="small" type="warning" @click="showCatchUpDialog = true" round>
+          <el-icon><Refresh /></el-icon>
+          漏打补签
+        </el-button>
+      </div>
+      <HeatmapCalendar 
+        :checkins="habit.checkins" 
+        :color="habit.color" 
+        :days="90" 
+        :habit-id="habit.id"
+        :interactive="true"
+        @catchup="handleCatchup"
+      />
     </section>
 
     <!-- Weekly Chart -->
@@ -75,6 +88,13 @@
       :habit="habit"
       @submit="handleEdit"
     />
+
+    <!-- Catch-up Dialog -->
+    <CatchUpDialog
+      v-model:visible="showCatchUpDialog"
+      :habit-id="habit.id"
+      @success="handleCatchup"
+    />
   </div>
 
   <!-- Not Found -->
@@ -88,17 +108,20 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Edit, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Delete, Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useHabitsStore } from '../stores/habits'
 import HeatmapCalendar from '../components/HeatmapCalendar.vue'
 import WeeklyChart from '../components/WeeklyChart.vue'
 import HabitForm from '../components/HabitForm.vue'
+import CatchUpDialog from '../components/CatchUpDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const store = useHabitsStore()
 
 const showEditForm = ref(false)
+const showCatchUpDialog = ref(false)
 
 const habit = computed(() => store.getHabit(route.params.id))
 const streak = computed(() => store.getHabitStreak(route.params.id))
@@ -113,6 +136,14 @@ function handleEdit(habitData) {
 function handleDelete() {
   store.deleteHabit(route.params.id)
   router.push('/')
+}
+
+function handleCatchup(result) {
+  if (result.action === 'catchup') {
+    ElMessage.success(`补签成功：${result.date}`)
+  } else if (result.action === 'cancel') {
+    ElMessage.info(`已取消补签：${result.date}`)
+  }
 }
 
 onMounted(() => {
@@ -195,6 +226,20 @@ onMounted(() => {
   padding: 24px;
   margin-bottom: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
 }
 
 .section-card h3 {
