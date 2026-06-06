@@ -25,6 +25,22 @@
         <HabitIcon v-model="formData.icon" />
       </el-form-item>
 
+      <el-form-item label="习惯分类" prop="category">
+        <div class="category-grid">
+          <div
+            v-for="cat in categories"
+            :key="cat.id"
+            class="category-item"
+            :class="{ selected: formData.category === cat.id }"
+            :style="{ '--cat-color': cat.color }"
+            @click="formData.category = cat.id"
+          >
+            <span class="category-icon">{{ cat.icon }}</span>
+            <span class="category-name">{{ cat.name }}</span>
+          </div>
+        </div>
+      </el-form-item>
+
       <el-form-item label="主题颜色">
         <div class="color-palette">
           <button
@@ -70,6 +86,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import HabitIcon from './HabitIcon.vue'
+import { CATEGORY_LIST } from '../stores/habits'
 
 const props = defineProps({
   visible: {
@@ -88,6 +105,8 @@ const formRef = ref(null)
 
 const isEdit = computed(() => !!props.habit)
 
+const categories = CATEGORY_LIST
+
 const colors = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
   '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
@@ -97,6 +116,7 @@ const formData = ref({
   name: '',
   icon: '🎯',
   color: '#6366f1',
+  category: 'other',
   frequency: 'daily',
   weeklyTarget: 7
 })
@@ -116,6 +136,7 @@ watch(() => props.visible, (newVal) => {
       name: '',
       icon: '🎯',
       color: colors[0],
+      category: 'other',
       frequency: 'daily',
       weeklyTarget: 7
     }
@@ -139,6 +160,47 @@ async function handleSubmit() {
 </script>
 
 <style scoped>
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  border-radius: 12px;
+  border: 2px solid #e8e8e8;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fafafa;
+}
+
+.category-item:hover {
+  border-color: var(--cat-color);
+  background: #fff;
+}
+
+.category-item.selected {
+  border-color: var(--cat-color);
+  background: var(--cat-color);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.category-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.category-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .color-palette {
   display: flex;
   gap: 10px;

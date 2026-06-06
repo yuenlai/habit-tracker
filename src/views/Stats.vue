@@ -70,6 +70,97 @@
       </div>
     </section>
 
+    <!-- Category Comparison -->
+    <section class="category-section" v-if="store.categoryStats.length > 0">
+      <h2>分类对比</h2>
+      <div class="category-stats-grid">
+        <div
+          v-for="cat in rankedCategories"
+          :key="cat.id"
+          class="category-stat-card"
+          :style="{ '--cat-color': cat.color }"
+        >
+          <div class="cat-header">
+            <span class="cat-icon">{{ cat.icon }}</span>
+            <span class="cat-name">{{ cat.name }}</span>
+          </div>
+          <div class="cat-stats">
+            <div class="cat-stat-item">
+              <span class="cat-stat-value">{{ cat.avgRate }}%</span>
+              <span class="cat-stat-label">平均完成率</span>
+            </div>
+            <div class="cat-stat-item">
+              <span class="cat-stat-value">{{ cat.total }}</span>
+              <span class="cat-stat-label">习惯数</span>
+            </div>
+            <div class="cat-stat-item">
+              <span class="cat-stat-value">{{ cat.totalCheckins }}</span>
+              <span class="cat-stat-label">总打卡</span>
+            </div>
+          </div>
+          <div class="cat-progress-bar-container">
+            <div
+              class="cat-progress-bar"
+              :style="{ width: cat.avgRate + '%', background: cat.color }"
+            ></div>
+          </div>
+          <div class="cat-habits-list">
+            <div
+              v-for="habit in cat.habits.slice(0, 3)"
+              :key="habit.id"
+              class="cat-habit-item"
+            >
+              <span class="cat-habit-icon">{{ habit.icon }}</span>
+              <span class="cat-habit-name">{{ habit.name }}</span>
+              <span class="cat-habit-rate">{{ store.getHabitCompletionRate(habit.id, 30) }}%</span>
+            </div>
+            <div v-if="cat.habits.length > 3" class="cat-habit-more">
+              还有 {{ cat.habits.length - 3 }} 个习惯...
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Category Weekly Comparison Chart -->
+    <section class="category-chart-section" v-if="store.categoryStats.length >= 2">
+      <h2>分类周对比</h2>
+      <div class="category-weekly-chart">
+        <div class="chart-week-bars">
+          <div
+            v-for="(day, dayIndex) in weekDays"
+            :key="dayIndex"
+            class="chart-day-column"
+          >
+            <div class="day-bar-container">
+              <div
+                v-for="(catStat, catIndex) in categoryWeekData"
+                :key="catStat.id"
+                class="day-bar-segment"
+                :style="{
+                  height: catStat.days[dayIndex].rate + '%',
+                  background: catStat.color,
+                  bottom: getSegmentBottom(catIndex, dayIndex) + '%'
+                }"
+                :title="`${catStat.name}: ${catStat.days[dayIndex].completed}/${catStat.days[dayIndex].total}`"
+              ></div>
+            </div>
+            <span class="chart-day-label">{{ day }}</span>
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span
+            v-for="catStat in categoryWeekData"
+            :key="catStat.id"
+            class="legend-item"
+          >
+            <span class="legend-dot" :style="{ background: catStat.color }"></span>
+            {{ catStat.icon }} {{ catStat.name }}
+          </span>
+        </div>
+      </div>
+    </section>
+
     <!-- Highlights -->
     <section class="highlights-section" v-if="store.habits.length >= 2">
       <div class="highlight-card best">
@@ -92,6 +183,7 @@
 import { computed, onMounted } from 'vue'
 import { List, Checked, TrendCharts, Trophy } from '@element-plus/icons-vue'
 import { useHabitsStore } from '../stores/habits'
+import { getDaysAgo, getDayName, parseDate } from '../utils/date'
 import StatsCard from '../components/StatsCard.vue'
 import WeeklyChart from '../components/WeeklyChart.vue'
 
@@ -110,6 +202,52 @@ const bestHabit = computed(() => rankedHabits.value[0])
 const bestHabitRate = computed(() => bestHabit.value?.rate || 0)
 const worstHabit = computed(() => rankedHabits.value[rankedHabits.value.length - 1])
 const worstHabitRate = computed(() => worstHabit.value?.rate || 0)
+
+const rankedCategories = computed(() => {
+  return [...store.categoryStats].sort((a, b) => b.avgRate - a.avgRate)
+})
+
+const weekDays = computed(() => {
+  const days = []
+  for (let i = 6; i >= 0; i--) {
+    const dateStr = getDaysAgo(i)
+    const date = parseDate(dateStr)
+    days.push(getDayName(date.getDay()))
+  }
+  return days
+})
+
+const categoryWeekData = computed(() => {
+  return store.categoryStats.map(cat => {
+    const catStats = store.getCategoryStats(cat.id, 7)
+    if (!catStats) return null
+    
+    const days = []
+    for (let i = 6; i >= 0; i--) {
+      const dateStr = getDaysAgo(i)
+      days.push(catStats.dayData[dateStr] || { completed: 0, total: 0, rate: 0 })
+    }
+    
+    return {
+      id: cat.id,
+      name: cat.name,
+      icon: cat.icon,
+      color: cat.color,
+      days
+    }
+  }).filter(Boolean)
+})
+
+function getSegmentBottom(catIndex, dayIndex) {
+  let bottom = 0
+  for (let i = 0; i < catIndex; i++) {
+    const prevCat = categoryWeekData.value[i]
+    if (prevCat) {
+      bottom += prevCat.days[dayIndex].rate
+    }
+  }
+  return Math.min(bottom, 100)
+}
 
 onMounted(() => {
   store.init()
@@ -296,5 +434,200 @@ onMounted(() => {
 .highlight-detail {
   font-size: 13px;
   color: #666;
+}
+
+.category-section,
+.category-chart-section {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.category-section h2,
+.category-chart-section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 20px 0;
+}
+
+.category-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.category-stat-card {
+  border: 2px solid #f0f0f0;
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.3s;
+}
+
+.category-stat-card:hover {
+  border-color: var(--cat-color);
+  transform: translateY(-2px);
+}
+
+.cat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cat-icon {
+  font-size: 24px;
+}
+
+.cat-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.cat-stats {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 12px;
+}
+
+.cat-stat-item {
+  text-align: center;
+}
+
+.cat-stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cat-color);
+}
+
+.cat-stat-label {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.cat-progress-bar-container {
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.cat-progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.cat-habits-list {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
+}
+
+.cat-habit-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.cat-habit-icon {
+  font-size: 16px;
+}
+
+.cat-habit-name {
+  flex: 1;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-habit-rate {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.cat-habit-more {
+  font-size: 12px;
+  color: #999;
+  padding: 6px 0;
+}
+
+.category-weekly-chart {
+  width: 100%;
+}
+
+.chart-week-bars {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  height: 200px;
+  padding: 0 20px;
+  margin-bottom: 20px;
+}
+
+.chart-day-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.day-bar-container {
+  width: 40px;
+  height: 160px;
+  position: relative;
+  background: #f5f5f5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.day-bar-segment {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition: height 0.3s ease, bottom 0.3s ease;
+}
+
+.day-bar-segment:first-child {
+  border-radius: 6px 6px 0 0;
+}
+
+.chart-day-label {
+  font-size: 12px;
+  color: #999;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #666;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
 }
 </style>

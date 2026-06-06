@@ -10,9 +10,14 @@
         <span class="habit-icon-large">{{ habit.icon }}</span>
         <div class="habit-info">
           <h1>{{ habit.name }}</h1>
-          <el-tag :color="habit.color" effect="dark" size="small" round>
-            {{ habit.frequency === 'daily' ? '每日' : `每周${habit.weeklyTarget}天` }}
-          </el-tag>
+          <div class="habit-tags">
+            <el-tag :color="categoryInfo.color" effect="dark" size="small" round>
+              {{ categoryInfo.icon }} {{ categoryInfo.name }}
+            </el-tag>
+            <el-tag :color="habit.color" effect="dark" size="small" round>
+              {{ habit.frequency === 'daily' ? '每日' : `每周${habit.weeklyTarget}天` }}
+            </el-tag>
+          </div>
         </div>
       </div>
     </div>
@@ -204,7 +209,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Edit, Delete, Refresh, ArrowDown, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useHabitsStore } from '../stores/habits'
+import { useHabitsStore, HABIT_CATEGORIES } from '../stores/habits'
 import { parseDate, getDayName } from '../utils/date'
 import HeatmapCalendar from '../components/HeatmapCalendar.vue'
 import WeeklyChart from '../components/WeeklyChart.vue'
@@ -224,6 +229,10 @@ const currentDiaryDate = ref('')
 const isEditingDiary = ref(false)
 
 const habit = computed(() => store.getHabit(route.params.id))
+const categoryInfo = computed(() => {
+  if (!habit.value) return HABIT_CATEGORIES.other
+  return HABIT_CATEGORIES[habit.value.category] || HABIT_CATEGORIES.other
+})
 const streak = computed(() => store.getHabitStreak(route.params.id))
 const longestStreak = computed(() => store.getHabitLongestStreak(route.params.id))
 const totalCheckins = computed(() => store.getHabitTotalCheckins(route.params.id))
@@ -349,6 +358,12 @@ onMounted(() => {
   font-weight: 700;
   color: #1a1a1a;
   margin: 0 0 8px 0;
+}
+
+.habit-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .stats-row {

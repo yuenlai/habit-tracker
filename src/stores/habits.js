@@ -3,6 +3,18 @@ import { ref, computed } from 'vue'
 import { saveData, loadData } from '../utils/storage'
 import { formatDate, getDaysAgo, calculateStreak, calculateLongestStreak, calculateCompletionRate, countTotalCheckins, isWithinCatchUpWindow } from '../utils/date'
 
+// Categories
+export const HABIT_CATEGORIES = {
+  health: { id: 'health', name: '健康', icon: '💪', color: '#FF6B6B' },
+  learning: { id: 'learning', name: '学习', icon: '📚', color: '#4ECDC4' },
+  life: { id: 'life', name: '生活', icon: '🏠', color: '#45B7D1' },
+  work: { id: 'work', name: '工作', icon: '💼', color: '#96CEB4' },
+  social: { id: 'social', name: '社交', icon: '👥', color: '#DDA0DD' },
+  other: { id: 'other', name: '其他', icon: '🎯', color: '#FFEAA7' }
+}
+
+export const CATEGORY_LIST = Object.values(HABIT_CATEGORIES)
+
 // Generate unique ID
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2)
@@ -65,6 +77,7 @@ function createSeedHabits() {
       name: '晨跑',
       icon: '🏃',
       color: '#FF6B6B',
+      category: 'health',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
@@ -77,6 +90,7 @@ function createSeedHabits() {
       name: '阅读30分钟',
       icon: '📚',
       color: '#4ECDC4',
+      category: 'learning',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
@@ -89,6 +103,7 @@ function createSeedHabits() {
       name: '喝8杯水',
       icon: '💧',
       color: '#45B7D1',
+      category: 'health',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
@@ -101,6 +116,7 @@ function createSeedHabits() {
       name: '冥想',
       icon: '🧘',
       color: '#96CEB4',
+      category: 'health',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
@@ -113,6 +129,7 @@ function createSeedHabits() {
       name: '写日记',
       icon: '📝',
       color: '#FFEAA7',
+      category: 'life',
       frequency: 'daily',
       weeklyTarget: 7,
       createdAt: getDaysAgo(30),
@@ -136,6 +153,7 @@ export const useHabitsStore = defineStore('habits', () => {
     if (savedData && Array.isArray(savedData) && savedData.length > 0) {
       habits.value = savedData.map(habit => ({
         ...habit,
+        category: habit.category || 'other',
         catchUps: habit.catchUps || {},
         diaries: habit.diaries || {}
       }))
@@ -185,6 +203,67 @@ export const useHabitsStore = defineStore('habits', () => {
     return Math.round(rates.reduce((sum, r) => sum + r, 0) / rates.length)
   })
 
+  const habitsByCategory = computed(() => {
+    const grouped = {}
+    CATEGORY_LIST.forEach(cat => {
+      grouped[cat.id] = habits.value.filter(h => h.category === cat.id)
+    })
+    return grouped
+  })
+
+  const categoryStats = computed(() => {
+    return CATEGORY_LIST.map(cat => {
+      const categoryHabits = habits.value.filter(h => h.category === cat.id)
+      const total = categoryHabits.length
+      const completedToday = categoryHabits.filter(h => h.checkins[todayStr.value] === true).length
+      const rates = categoryHabits.map(h => calculateCompletionRate(h.checkins, 30))
+      const avgRate = total > 0 ? Math.round(rates.reduce((sum, r) => sum + r, 0) / total) : 0
+      const totalCheckins = categoryHabits.reduce((sum, h) => sum + countTotalCheckins(h.checkins), 0)
+      
+      return {
+        ...cat,
+        total,
+        completedToday,
+        avgRate,
+        totalCheckins,
+        habits: categoryHabits
+      }
+    }).filter(cat => cat.total > 0)
+  })
+
+  function getHabitsByCategory(categoryId) {
+    if (categoryId === 'all') return habits.value
+    return habits.value.filter(h => h.category === categoryId)
+  }
+
+  function getCategoryStats(categoryId, days = 30) {
+    const categoryHabits = habits.value.filter(h => h.category === categoryId)
+    if (categoryHabits.length === 0) return null
+    
+    const rates = categoryHabits.map(h => calculateCompletionRate(h.checkins, days))
+    const avgRate = Math.round(rates.reduce((sum, r) => sum + r, 0) / rates.length)
+    const totalCheckins = categoryHabits.reduce((sum, h) => sum + countTotalCheckins(h.checkins), 0)
+    
+    const dayData = {}
+    for (let i = days - 1; i >= 0; i--) {
+      const dateStr = getDaysAgo(i)
+      const completed = categoryHabits.filter(h => h.checkins[dateStr] === true).length
+      dayData[dateStr] = {
+        completed,
+        total: categoryHabits.length,
+        rate: categoryHabits.length > 0 ? Math.round((completed / categoryHabits.length) * 100) : 0
+      }
+    }
+    
+    return {
+      ...HABIT_CATEGORIES[categoryId],
+      total: categoryHabits.length,
+      avgRate,
+      totalCheckins,
+      dayData
+    }
+  }
+
   // Actions
   function addHabit(habitData) {
     const newHabit = {
@@ -192,6 +271,7 @@ export const useHabitsStore = defineStore('habits', () => {
       name: habitData.name,
       icon: habitData.icon || '🎯',
       color: habitData.color || '#6366f1',
+      category: habitData.category || 'other',
       frequency: habitData.frequency || 'daily',
       weeklyTarget: habitData.weeklyTarget || 7,
       createdAt: todayStr.value,
@@ -362,6 +442,8 @@ export const useHabitsStore = defineStore('habits', () => {
     longestStreakOverall,
     totalCheckinsOverall,
     overallCompletionRate,
+    habitsByCategory,
+    categoryStats,
     // Actions
     init,
     addHabit,
@@ -382,6 +464,8 @@ export const useHabitsStore = defineStore('habits', () => {
     getDiary,
     getDiaries,
     deleteDiary,
-    hasDiary
+    hasDiary,
+    getHabitsByCategory,
+    getCategoryStats
   }
 })

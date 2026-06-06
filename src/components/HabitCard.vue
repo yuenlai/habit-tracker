@@ -9,6 +9,9 @@
           <span v-if="hasTodayDiary" class="diary-indicator" title="今天已写日记">📝</span>
         </div>
       </div>
+      <span class="category-tag" :style="{ background: categoryInfo.color + '20', color: categoryInfo.color }">
+        {{ categoryInfo.icon }} {{ categoryInfo.name }}
+      </span>
       <h3 class="habit-name">{{ habit.name }}</h3>
       <div class="card-footer">
         <span class="completion-rate">{{ completionRate }}%</span>
@@ -41,7 +44,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useHabitsStore } from '../stores/habits'
+import { useHabitsStore, HABIT_CATEGORIES } from '../stores/habits'
 import StreakBadge from './StreakBadge.vue'
 import DiaryDialog from './DiaryDialog.vue'
 import { formatDate } from '../utils/date'
@@ -65,6 +68,7 @@ const isChecked = computed(() => store.isCheckedToday(props.habit.id))
 const streak = computed(() => store.getHabitStreak(props.habit.id))
 const completionRate = computed(() => store.getHabitCompletionRate(props.habit.id, 7))
 const hasTodayDiary = computed(() => store.hasDiary(props.habit.id, todayStr.value))
+const categoryInfo = computed(() => HABIT_CATEGORIES[props.habit.category] || HABIT_CATEGORIES.other)
 
 function handleCheck() {
   if (animating.value) return
@@ -148,6 +152,15 @@ function handleDiarySkip() {
 
 .habit-icon {
   font-size: 36px;
+}
+
+.category-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 8px;
 }
 
 .habit-name {
